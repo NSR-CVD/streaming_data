@@ -12,6 +12,8 @@ services:
       - "kafka"
   kafka:
     image: obsidiandynamics/kafka
+    volumes : 
+      - ./apps:/kafka_2.12-2.3.0/
     container_name: "kafka"
     restart: "no"
     ports:
