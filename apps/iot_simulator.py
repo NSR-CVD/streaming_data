@@ -5,6 +5,13 @@ To generate <number> JSON data:
 $ ./iotsimulator.py <number>
 
 '''
+from kafka import KafkaProducer
+from json import dumps
+import time
+
+producer = KafkaProducer(bootstrap_servers=['localhost:9092'],
+                         value_serializer=lambda x: 
+                         dumps(x).encode('utf-8'))
 
 import sys
 import datetime
@@ -87,7 +94,15 @@ if __name__ == "__main__":
         today = datetime.datetime.today()
         datestr = today.isoformat()
 
-        print(re.sub(r"[\s+]", "", iotmsg_header) % (guid, destination, state), end='')
-        print(re.sub(r"[\s+]", "", iotmsg_eventTime) % (datestr), end='')
-        print(re.sub(r"[\s+]", "", iotmsg_payload) % (format_str), end='')
-        print(re.sub(r"[\s+]", "", iotmsg_data) % (temperature))
+        iot_data_simulator = re.sub(r"[\s+]", "", iotmsg_header) % (guid, destination, state) + \
+        re.sub(r"[\s+]", "", iotmsg_eventTime) % (datestr) + \
+        re.sub(r"[\s+]", "", iotmsg_payload) % (format_str) + \
+        re.sub(r"[\s+]", "", iotmsg_data) % (temperature)
+
+        # print(re.sub(r"[\s+]", "", iotmsg_header) % (guid, destination, state), end='')
+        # print(re.sub(r"[\s+]", "", iotmsg_eventTime) % (datestr), end='')
+        # print(re.sub(r"[\s+]", "", iotmsg_payload) % (format_str), end='')
+        # print(re.sub(r"[\s+]", "", iotmsg_data) % (temperature))
+
+        print(iot_data_simulator)
+        producer.send('test_kafka',value=iot_data_simulator)
