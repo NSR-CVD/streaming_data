@@ -3,6 +3,7 @@
 from kafka import KafkaConsumer
 from json import loads
 import pymongo
+import json
 
 consumer = KafkaConsumer(
     'test_kafka',

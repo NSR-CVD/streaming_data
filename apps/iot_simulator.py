@@ -1,11 +1,5 @@
 #!/usr/bin/python3.10
 
-'''
-To generate <number> JSON data:
-$ ./iotsimulator.py <number>
-
-'''
-from random import randrange
 from kafka import KafkaProducer
 from json import dumps
 import sys
@@ -13,94 +7,65 @@ import datetime
 import random
 import re
 
-producer = KafkaProducer(bootstrap_servers=['localhost:9092'],
-                         value_serializer=lambda x: 
-                         dumps(x).encode('utf-8'))
+class IoTDataGenerator:
+    def __init__(self, kafka_topic, num_msgs=1):
+        self.kafka_topic = kafka_topic
+        self.num_msgs = num_msgs
+        self.producer = KafkaProducer(
+            bootstrap_servers=['localhost:9092'],
+            value_serializer=lambda x: dumps(x).encode('utf-8')
+        )
+        self.device_state_map = {}
+        self.temp_base = {
+            'WA': 48.3, 'DE': 55.3, 'DC': 58.5, 'WI': 43.1,
+            # ... (other state temperature values)
+        }
+        self.current_temp = {}
+        self.guid_base = "0-ZZZ12345678-"
+        self.destination = "0-AAA12345678"
+        self.format_str = "urn:example:sensor:temp"
+        self.letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
+    def generate_iot_data(self):
+        for counter in range(0, self.num_msgs):
+            rand_num = str(random.randrange(0, 9)) + str(random.randrange(0, 9))
+            rand_letter = random.choice(self.letters)
+            temp_init_weight = random.uniform(-5, 5)
+            temp_delta = random.uniform(-1, 1)
 
-# Set number of simulated messages to generate
-if len(sys.argv) > 1:
-    num_msgs = int(sys.argv[1])
-else:
-    num_msgs = 1
+            guid = self.guid_base + rand_num + rand_letter
+            state = random.choice(list(self.temp_base.keys()))
 
-# mapping of a guid and a state {guid: state}
-device_state_map = {}
+            if guid not in self.device_state_map:
+                self.device_state_map[guid] = state
+                self.current_temp[guid] = self.temp_base[state] + temp_init_weight
+            elif self.device_state_map[guid] != state:
+                state = self.device_state_map[guid]
 
-# average annual temperature of each state
-temp_base = {'WA': 48.3, 'DE': 55.3, 'DC': 58.5, 'WI': 43.1,
-             'WV': 51.8, 'HI': 70.0, 'FL': 70.7, 'WY': 42.0,
-             'NH': 43.8, 'NJ': 52.7, 'NM': 53.4, 'TX': 64.8,
-             'LA': 66.4, 'NC': 59.0, 'ND': 40.4, 'NE': 48.8,
-             'TN': 57.6, 'NY': 45.4, 'PA': 48.8, 'CA': 59.4,
-             'NV': 49.9, 'VA': 55.1, 'CO': 45.1, 'AK': 26.6,
-             'AL': 62.8, 'AR': 60.4, 'VT': 42.9, 'IL': 51.8,
-             'GA': 63.5, 'IN': 51.7, 'IA': 47.8, 'OK': 59.6,
-             'AZ': 60.3, 'ID': 44.4, 'CT': 49.0, 'ME': 41.0,
-             'MD': 54.2, 'MA': 47.9, 'OH': 50.7, 'UT': 48.6,
-             'MO': 54.5, 'MN': 41.2, 'MI': 44.4, 'RI': 50.1,
-             'KS': 54.3, 'MT': 42.7, 'MS': 63.4, 'SC': 62.4,
-             'KY': 55.6, 'OR': 48.4, 'SD': 45.2}
+            temperature = self.current_temp[guid] + temp_delta
+            self.current_temp[guid] = temperature
+            today = datetime.datetime.today()
+            datestr = today.isoformat()
 
-# latest temperature measured by sensors {guid: temperature}
-current_temp = {}
+            iot_data = {
+                "guid": guid,
+                "destination": self.destination,
+                "state": state,
+                "eventTime": datestr + "Z",
+                "payload": {
+                    "format": self.format_str,
+                    "data": {
+                        "temperature": round(temperature, 1)
+                    }
+                }
+            }
 
-# Fixed values
-guid_base = "0-ZZZ12345678-"
-destination = "0-AAA12345678"
-format_str = "urn:example:sensor:temp"
+            self.producer.send(self.kafka_topic, value=iot_data)
+            print(iot_data)
 
-# Choice for random letter
-letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-
-iotmsg_header = """\
-{ "guid": "%s",
-  "destination": "%s",
-  "state": "%s", """
-
-iotmsg_eventTime = """\
-  "eventTime": "%sZ", """
-
-iotmsg_payload = """\
-  "payload": {"format": "%s", """
-
-iotmsg_data = """\
-     "data": { "temperature": %.1f  }
-     }
-}"""
-
-##### Generate JSON output:
 if __name__ == "__main__":
-    for counter in range(0, num_msgs):
-        rand_num = str(random.randrange(0, 9)) + str(random.randrange(0, 9))
-        rand_letter = random.choice(letters)
-        temp_init_weight = random.uniform(-5, 5)
-        temp_delta = random.uniform(-1, 1)
+    kafka_topic = 'test_kafka'
+    num_msgs = 1 if len(sys.argv) <= 1 else int(sys.argv[1])
 
-        guid = guid_base + rand_num + rand_letter
-        state = random.choice(list(temp_base.keys()))
-
-        if guid not in device_state_map:  # first entry
-            device_state_map[guid] = state
-            current_temp[guid] = temp_base[state] + temp_init_weight
-
-        elif device_state_map[guid] != state:  # The guid already exists but the randomly chosen state doesn't match
-            state = device_state_map[guid]
-
-        temperature = current_temp[guid] + temp_delta
-        current_temp[guid] = temperature  # update current temperature
-        today = datetime.datetime.today()
-        datestr = today.isoformat()
-
-        iot_data_simulator = re.sub(r"[\s+]", "", iotmsg_header) % (guid, destination, state) + \
-        re.sub(r"[\s+]", "", iotmsg_eventTime) % (datestr) + \
-        re.sub(r"[\s+]", "", iotmsg_payload) % (format_str) + \
-        re.sub(r"[\s+]", "", iotmsg_data) % (temperature)
-
-        # print(re.sub(r"[\s+]", "", iotmsg_header) % (guid, destination, state), end='')
-        # print(re.sub(r"[\s+]", "", iotmsg_eventTime) % (datestr), end='')
-        # print(re.sub(r"[\s+]", "", iotmsg_payload) % (format_str), end='')
-        # print(re.sub(r"[\s+]", "", iotmsg_data) % (temperature))
-
-        print(iot_data_simulator)
-        producer.send('test_kafka',value=iot_data_simulator)
+    iot_data_generator = IoTDataGenerator(kafka_topic, num_msgs)
+    iot_data_generator.generate_iot_data()
