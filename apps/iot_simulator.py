@@ -5,20 +5,18 @@ To generate <number> JSON data:
 $ ./iotsimulator.py <number>
 
 '''
+from random import randrange
 from kafka import KafkaProducer
 from json import dumps
-import time
+import sys
+import datetime
+import random
+import re
 
 producer = KafkaProducer(bootstrap_servers=['localhost:9092'],
                          value_serializer=lambda x: 
                          dumps(x).encode('utf-8'))
 
-import sys
-import datetime
-import random
-from random import randrange
-import re
-import copy
 
 # Set number of simulated messages to generate
 if len(sys.argv) > 1:
