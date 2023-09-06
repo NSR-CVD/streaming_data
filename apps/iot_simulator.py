@@ -2,6 +2,7 @@
 
 from kafka import KafkaProducer
 from json import dumps
+import json
 import sys
 import datetime
 import random
@@ -59,7 +60,7 @@ class IoTDataGenerator:
                     }
                 }
             }
-
+            iot_data = json.dumps(iot_data)
             self.producer.send(self.kafka_topic, value=iot_data)
             print(iot_data)
 
